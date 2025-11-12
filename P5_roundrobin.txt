@@ -1,0 +1,137 @@
+#include <iostream>
+#include <vector>
+#include <queue>
+#include <algorithm>
+#include <cmath> // For std::max
+
+using namespace std;
+
+// Structure to hold process details
+struct Process {
+    int pid, at, bt, ct, tat, wt;
+    int remaining; // internal use only
+};
+
+// Function to display the results
+void display(const vector<Process> &p) {
+    cout << "\nPID\tAT\tBT\tCT\tTAT\tWT\n";
+    for (const auto &x : p)
+        cout << "P" << x.pid << "\t" << x.at << "\t" << x.bt << "\t"
+             << x.ct << "\t" << x.tat << "\t" << x.wt << "\n";
+}
+
+// Function to calculate and display averages
+void average(const vector<Process> &p) {
+    float avg_tat = 0, avg_wt = 0;
+    for (const auto &x : p) {
+        avg_tat += x.tat;
+        avg_wt += x.wt;
+    }
+    cout << "Average Turnaround Time: " << avg_tat / p.size() << endl;
+    cout << "Average Waiting Time: " << avg_wt / p.size() << endl;
+}
+
+// Round Robin Scheduling Algorithm
+void RoundRobin(vector<Process> &p, int quantum) {
+    cout << "\n====== Round Robin (Preemptive) ======\n";
+    int n = p.size();
+    
+    // Sort processes by Arrival Time (AT)
+    sort(p.begin(), p.end(), [](const Process &a, const Process &b) {
+        return a.at < b.at; 
+    });
+
+    queue<int> q; // Ready queue, holds indices of processes in p
+    int time = 0;
+    int completed = 0;
+    vector<bool> inQ(n, false);
+    int last_arrival_check = 1; // Start checking from the second process (index 1)
+
+    // Initialize remaining burst time
+    for (auto &x : p)
+        x.remaining = x.bt;
+
+    // Start with the first arrived process
+    time = p[0].at;
+    q.push(0);
+    inQ[0] = true;
+
+    while (completed < n) {
+        // If the queue is empty, advance time to the arrival of the next process
+        if (q.empty()) {
+            for (int i = 0; i < n; i++) {
+                if (p[i].remaining > 0) {
+                    time = max(time, p[i].at); // Jump time to the next arrival
+                    q.push(i);
+                    inQ[i] = true;
+                    // Update last_arrival_check to ensure we don't re-add this on the next check
+                    last_arrival_check = i + 1; 
+                    break;
+                }
+            }
+        }
+
+        int idx = q.front();
+        q.pop();
+        inQ[idx] = false;
+
+        int exec = min(quantum, p[idx].remaining);
+        p[idx].remaining -= exec;
+        time += exec;
+
+        // --- Step 1: Add newly arrived processes ---
+        // Processes are sorted by AT, so we only need to check from last_arrival_check
+        while (last_arrival_check < n && p[last_arrival_check].at <= time) {
+            if (p[last_arrival_check].remaining > 0 && !inQ[last_arrival_check]) {
+                q.push(last_arrival_check);
+                inQ[last_arrival_check] = true;
+            }
+            last_arrival_check++;
+        }
+        
+        // --- Step 2: Handle completion or preemption ---
+        if (p[idx].remaining == 0) {
+            // Process completed
+            p[idx].ct = time;
+            p[idx].tat = p[idx].ct - p[idx].at;
+            p[idx].wt = p[idx].tat - p[idx].bt;
+            completed++;
+        } else {
+            // Process preempted, add back to the end of the queue
+            q.push(idx);
+            inQ[idx] = true;
+        }
+    }
+
+    display(p);
+    average(p);
+}
+
+int main() {
+    // Standard I/O for input
+    int n, q;
+    cout << "Enter number of processes: ";
+    if (!(cin >> n) || n <= 0) {
+        cerr << "Invalid number of processes.\n";
+        return 1;
+    }
+
+    vector<Process> p(n);
+    for (int i = 0; i < n; i++) {
+        p[i].pid = i + 1;
+        cout << "Enter AT and BT for P" << i + 1 << ": ";
+        if (!(cin >> p[i].at >> p[i].bt) || p[i].at < 0 || p[i].bt <= 0) {
+            cerr << "Invalid AT or BT for P" << i + 1 << ".\n";
+            return 1;
+        }
+    }
+
+    cout << "Enter Time Quantum: ";
+    if (!(cin >> q) || q <= 0) {
+        cerr << "Invalid time quantum.\n";
+        return 1;
+    }
+
+    RoundRobin(p, q);
+    return 0;
+}
